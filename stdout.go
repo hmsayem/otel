@@ -53,5 +53,4 @@ func main() {
 	}
 
 	counter.Add(context.Background(), 1)
-	counter.Add(context.Background(), 1)
 }

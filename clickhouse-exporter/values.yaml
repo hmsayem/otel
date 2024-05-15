@@ -1,0 +1,32 @@
+mode: daemonset
+image:
+  repository: otel/opentelemetry-collector-contrib
+presets:
+  # enables the k8sattributesprocessor and adds it to the traces, metrics, and logs pipelines
+  kubernetesAttributes:
+    enabled: true
+  logsCollection:
+    enabled: true
+config:
+  exporters:
+    clickhouse:
+      endpoint: "tcp://demo:changeit@clickhouse-demo:9000"
+      database: "otel"
+      ttl: 72h
+      logs_table_name: otel_logs
+      timeout: 5s
+      retry_on_failure:
+        enabled: true
+        initial_interval: 5s
+        max_interval: 30s
+        max_elapsed_time: 300s
+  processors:
+    batch:
+      timeout: 5s
+      send_batch_size: 100000
+  service:
+    pipelines:
+      logs:
+        receivers: [filelog]
+        processors: [batch]
+        exporters: [clickhouse]

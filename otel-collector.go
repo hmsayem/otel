@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
+	"go.opentelemetry.io/otel/exporters/stdout/stdoutmetric"
 	otelmetric "go.opentelemetry.io/otel/metric"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -10,7 +12,6 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/sdk/resource"
 
 	"go.opentelemetry.io/otel/sdk/metric"
@@ -40,7 +41,7 @@ func main() {
 
 	meter := mp.Meter("test")
 
-	counter, err := meter.Int64Counter("test.counter",
+	counter, err := meter.Int64Counter("test_counter",
 		otelmetric.WithUnit("1"),
 		otelmetric.WithDescription("test counter"))
 	if err != nil {
@@ -51,6 +52,11 @@ func main() {
 
 	for i := 0; i < 10; i++ {
 		counter.Add(ctx, 1)
+	}
+
+	err = mp.ForceFlush(context.Background())
+	if err != nil {
+		return
 	}
 
 }
@@ -64,6 +70,26 @@ func newResource() (*resource.Resource, error) {
 }
 
 func newMeterProvider(res *resource.Resource) (*metric.MeterProvider, error) {
+
+	exporter, err := getGRPCmetricExporter()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create otel metric exporter")
+	}
+	meterProvider := metric.NewMeterProvider(
+		metric.WithResource(res),
+		metric.WithReader(metric.NewPeriodicReader(exporter,
+			// Default is 1m. Set to 3s for demonstrative purposes.
+			metric.WithInterval(1*time.Second))),
+	)
+
+	return meterProvider, nil
+}
+
+func getStdoutMetricExporter() (metric.Exporter, error) {
+	return stdoutmetric.New()
+}
+
+func getGRPCmetricExporter() (metric.Exporter, error) {
 	// using NodePort service to connect to the otel collector running in k8s
 	conn, err := grpc.NewClient("172.18.0.2:30080",
 		// TLS is recommended in production.
@@ -78,12 +104,5 @@ func newMeterProvider(res *resource.Resource) (*metric.MeterProvider, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create metrics exporter: %w", err)
 	}
-
-	meterProvider := metric.NewMeterProvider(
-		metric.WithResource(res),
-		metric.WithReader(metric.NewPeriodicReader(metricExporter,
-			// Default is 1m. Set to 3s for demonstrative purposes.
-			metric.WithInterval(1*time.Second))),
-	)
-	return meterProvider, nil
+	return metricExporter, nil
 }

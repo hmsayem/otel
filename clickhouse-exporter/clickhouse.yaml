@@ -19,7 +19,7 @@ spec:
           port: 2181
     users:
         demoreadonly/profile: readonly
-        demo/password: demoPassword
+        demo/password: changeit
         demo/profile: default
         demo/quota: default
         demo/networks/ip:
